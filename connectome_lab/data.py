@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+from contextlib import closing
 from dataclasses import asdict, fields
 import hashlib
 import io
@@ -143,9 +144,10 @@ def save_sqlite(graph: Connectome, path: str | Path, *, overwrite: bool = False)
     descriptor, temporary = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
     os.close(descriptor)
     try:
-        with sqlite3.connect(temporary) as conn:
-            conn.execute("PRAGMA foreign_keys=ON")
-            conn.executescript("""
+        with closing(sqlite3.connect(temporary)) as conn:
+            with conn:
+                conn.execute("PRAGMA foreign_keys=ON")
+                conn.executescript("""
                 CREATE TABLE neurons (idx INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
                     neuron_type TEXT, neurotransmitter TEXT, role TEXT, region TEXT,
                     x REAL, y REAL, z REAL);
@@ -156,16 +158,15 @@ def save_sqlite(graph: Connectome, path: str | Path, *, overwrite: bool = False)
                 CREATE INDEX neurons_region ON neurons(region);
                 CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
             """)
-            conn.executemany("INSERT INTO neurons VALUES (?,?,?,?,?,?,?,?,?)",
-                             [(i, n.id, n.neuron_type, n.neurotransmitter, n.role, n.region, n.x, n.y, n.z)
-                              for i, n in enumerate(graph.neurons)])
-            conn.executemany("INSERT INTO synapses VALUES (?,?,?)",
-                             [(int(s), int(t), float(c)) for s, t, c in zip(graph.source, graph.target, graph.synapse_count)])
-            conn.executemany("INSERT INTO metadata VALUES (?,?)",
-                             [(str(k), json.dumps(v, ensure_ascii=False, allow_nan=False)) for k, v in graph.metadata.items()])
-            conn.execute("PRAGMA user_version=1")
+                conn.executemany("INSERT INTO neurons VALUES (?,?,?,?,?,?,?,?,?)",
+                                 [(i, n.id, n.neuron_type, n.neurotransmitter, n.role, n.region, n.x, n.y, n.z)
+                                  for i, n in enumerate(graph.neurons)])
+                conn.executemany("INSERT INTO synapses VALUES (?,?,?)",
+                                 [(int(s), int(t), float(c)) for s, t, c in zip(graph.source, graph.target, graph.synapse_count)])
+                conn.executemany("INSERT INTO metadata VALUES (?,?)",
+                                 [(str(k), json.dumps(v, ensure_ascii=False, allow_nan=False)) for k, v in graph.metadata.items()])
+                conn.execute("PRAGMA user_version=1")
         # Close before replace so this also works on Windows.
-        conn.close()
         os.replace(temporary, path)
     finally:
         if os.path.exists(temporary):
@@ -177,7 +178,7 @@ def load_sqlite(path: str | Path, *, region: str | None = None,
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(path)
-    with sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True) as conn:
+    with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)) as conn:
         if conn.execute("PRAGMA user_version").fetchone()[0] != 1:
             raise ValueError("Unsupported connectome database schema version.")
         rows = conn.execute("SELECT idx,id,neuron_type,neurotransmitter,role,region,x,y,z FROM neurons ORDER BY idx").fetchall()
@@ -186,7 +187,6 @@ def load_sqlite(path: str | Path, *, region: str | None = None,
         neurons = [Neuron(*r[1:]) for r in rows]
         edges = conn.execute("SELECT source,target,synapse_count FROM synapses ORDER BY source,target").fetchall()
         metadata = {k: json.loads(v) for k, v in conn.execute("SELECT key,value FROM metadata")}
-    conn.close()
     graph = Connectome(neurons, np.array([e[0] for e in edges], dtype=np.int64),
                        np.array([e[1] for e in edges], dtype=np.int64),
                        np.array([e[2] for e in edges]), metadata)

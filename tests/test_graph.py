@@ -151,6 +151,18 @@ class DataTests(unittest.TestCase):
             inferred = import_csv(None, edges)
             self.assertTrue(all(n.neurotransmitter == "unknown" for n in inferred.neurons))
 
+    def test_failed_save_keeps_existing_database_intact(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "graph.sqlite"
+            graph = synthetic_graph(4)
+            save_sqlite(graph, path)
+            original_bytes = path.read_bytes()
+            graph.metadata["invalid_json"] = float("nan")
+            with self.assertRaises(ValueError):
+                save_sqlite(graph, path, overwrite=True)
+            self.assertEqual(path.read_bytes(), original_bytes)
+            self.assertEqual(list(Path(temp).iterdir()), [path])
+
     def test_bundled_sample_is_genuine_but_not_complete_or_annotated_for_nt(self):
         graph = load_bundled_larval()
         self.assertEqual((graph.n_neurons, graph.n_edges), (192, 3361))
