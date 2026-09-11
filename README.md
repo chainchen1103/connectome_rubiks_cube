@@ -1,4 +1,4 @@
-> 本專案使用 ai 進行輔助，ai 主要完成可視化的 UI 部分   
+> 本專案使用 ai 進行輔助，ai 主要完成可視化的 UI 部分與可行性評估
 
 # Connectome Rubik's Cube Lab
 
