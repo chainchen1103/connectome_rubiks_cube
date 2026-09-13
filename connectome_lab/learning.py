@@ -39,8 +39,8 @@ class AgentConfig:
 def graph_fingerprint(graph):
     digest = hashlib.sha256()
     digest.update(json.dumps([n.__dict__ for n in graph.neurons], sort_keys=True).encode())
-    for values in [graph.source.astype('<i8'), graph.target.astype('<i8'), graph.synapse_count.astype('<f8')]:
-        digest.update(values.tobytes())
+    for values, dtype in ((graph.source, '<i8'), (graph.target, '<i8'), (graph.synapse_count, '<f8')):
+        digest.update(memoryview(np.ascontiguousarray(values, dtype=dtype)).cast('B'))
     return digest.hexdigest()
 
 

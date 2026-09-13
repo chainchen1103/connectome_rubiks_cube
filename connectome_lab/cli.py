@@ -69,12 +69,22 @@ def _load_graph(selection: str, seed: int = 0) -> Connectome:
         return synthetic_graph(seed)
     if selection == "larval":
         return load_bundled_larval()
+    if selection == "flywire":
+        folder = Path(__file__).resolve().parent.parent / 'data/flywire783/circuit'
+        metadata = json.loads((folder / 'provenance.json').read_text(encoding='utf-8'))
+        return import_csv(folder / 'neurons.csv', folder / 'synapses.csv', metadata=metadata)
+    if selection == 'malecns':
+        from .malecns import load_bundled_malecns
+        return load_bundled_malecns()
+    if Path(selection).suffix.lower() == '.npz':
+        from .malecns import load_malecns_archive
+        return load_malecns_archive(selection)
     return load_sqlite(selection)
 
 
 def _add_graph(parser: argparse.ArgumentParser, default: str = "synthetic") -> None:
-    parser.add_argument("--graph", default=default, metavar="synthetic|larval|PATH.sqlite",
-                        help="synthetic fixture, bundled measured larval subset, or SQLite path")
+    parser.add_argument("--graph", default=default, metavar="synthetic|larval|flywire|malecns|PATH",
+                        help="bundled circuit, SQLite graph, or full MaleCNS NPZ archive")
 
 
 def _simulate(graph: Connectome, output: Path, *, steps: int = 300,
@@ -89,7 +99,8 @@ def _simulate(graph: Connectome, output: Path, *, steps: int = 300,
         raise ValueError("steps must be positive.")
     output.mkdir(parents=True, exist_ok=True)
     network = LIFNetwork(graph, seed=seed)
-    plasticity = LocalPlasticity(network, PlasticityConfig(rule=rule))
+    plasticity_config = PlasticityConfig(rule=rule)
+    plasticity = LocalPlasticity(network, plasticity_config) if rule != 'none' else None
     sensory = [i for i, n in enumerate(graph.neurons) if n.role == "sensory"]
     stimulated = sensory or [0]
     spikes = np.zeros((steps, graph.n_neurons), dtype=bool)
@@ -102,14 +113,16 @@ def _simulate(graph: Connectome, output: Path, *, steps: int = 300,
             current.fill(0)
         spikes[step] = network.step(current)
         voltage[step] = network.voltage
-        plasticity.observe(spikes[step])
+        if plasticity:
+            plasticity.observe(spikes[step])
     # A single delayed reward is delivered after the stimulation episode.
-    plasticity.reward(reward)
+    if plasticity:
+        plasticity.reward(reward)
     metrics = {
         "metadata": graph.metadata,
         "neurons": graph.n_neurons, "edges": graph.n_edges,
         "seed": seed, "steps": steps, "dt_ms": network.config.dt_ms,
-        "model": asdict(network.config), "plasticity": asdict(plasticity.config),
+        "model": asdict(network.config), "plasticity": asdict(plasticity_config),
         "stimulus_current": 3.5, "stimulus_steps": stimulus_steps,
         "stimulated_neuron_ids": [graph.neurons[i].id for i in stimulated],
         "stimulus_mapping": "annotated sensory neurons" if sensory else "engineering fallback: neuron index zero",
@@ -133,6 +146,44 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="connectome-lab",
                                      description="Reproducible connectome learning experiments; research prototype.")
     commands = parser.add_subparsers(dest="command", required=True)
+
+    server = commands.add_parser('serve', help='open local interactive timed training and checkpoint UI')
+    server.add_argument('--port',type=_positive_int,default=8765)
+    server.add_argument('--dataset',choices=('malecns','flywire'),default='malecns')
+    server.add_argument('--output',type=Path,default=Path('outputs/live'))
+    server.add_argument('--open',action='store_true',dest='open_browser')
+
+    timed = commands.add_parser('train-timed', help='repeat cube attempts until deadline or solved, save and resume neural weights')
+    _add_graph(timed,default='malecns')
+    timed.add_argument('--seconds',type=_finite_float,default=60.)
+    timed.add_argument('--size',type=int,choices=(2,3),default=3)
+    timed.add_argument('--depth',type=_positive_int,default=3)
+    timed.add_argument('--seed',type=_nonnegative_int,default=0)
+    timed.add_argument('--output',type=Path,default=Path('outputs/sessions/default'))
+    timed.add_argument('--fresh',action='store_true')
+
+    dashboard = commands.add_parser('dashboard', help='export synchronized cube/fly/neural replay with anatomical brain view')
+    _add_graph(dashboard, default='malecns')
+    dashboard.add_argument('--output', type=Path, default=Path('outputs/dashboard.html'))
+    dashboard.add_argument('--frames', type=_positive_int, default=90)
+    dashboard.add_argument('--seed', type=_nonnegative_int, default=0)
+    dashboard.add_argument('--size', type=int, choices=(2,3), default=3)
+    dashboard.add_argument('--train-episodes', type=_nonnegative_int, default=0)
+    dashboard.add_argument('--anatomy', type=Path)
+    dashboard.add_argument('--cube-checkpoint', type=Path)
+
+    adult = commands.add_parser('fetch-flywire', help='download pinned adult full brain raw tables and import all released neurons')
+    adult.add_argument('--output', type=Path, default=Path('data/downloads/flywire783'))
+    adult.add_argument('--database', type=Path, default=Path('outputs/full_brain/flywire783.sqlite'))
+    adult.add_argument('--min-synapses', type=_positive_int, default=1)
+    adult.add_argument('--overwrite', action='store_true')
+
+    male = commands.add_parser('fetch-malecns', help='download MaleCNS v1.0 and import all 166,700 classified neurons (requires optional pyarrow)')
+    male.add_argument('--output', type=Path, default=Path('data/downloads/malecns'))
+    male.add_argument('--archive', type=Path, default=Path('outputs/full_brain/malecns.npz'))
+    male.add_argument('--database', type=Path, help='also export SQLite; optional and slower for 25 million pairs')
+    male.add_argument('--min-synapses', type=_positive_int, default=1)
+    male.add_argument('--overwrite', action='store_true')
 
     demo = commands.add_parser("demo", help="generate graph, simulation, benchmark and cube curriculum reports")
     _add_graph(demo)
@@ -178,7 +229,7 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--task", choices=TASKS, required=True)
     train.add_argument("--episodes", type=_positive_int, default=1200)
     train.add_argument("--seed", type=_nonnegative_int, default=0)
-    train.add_argument("--delay", type=_nonnegative_int, default=3)
+    train.add_argument("--delay", type=_positive_int, default=3)
     train.add_argument("--depth", type=_positive_int, default=1)
     train.add_argument("--output", type=Path, default=Path("outputs/train"))
     train.add_argument("--eval-episodes", type=_positive_int, default=200)
@@ -205,6 +256,28 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _dispatch(args: argparse.Namespace) -> dict:
+    if args.command == 'fetch-malecns':
+        from .malecns import fetch_malecns, load_malecns_graph, save_malecns_archive
+        for destination in (args.archive, args.database):
+            if destination and destination.exists() and not args.overwrite:
+                raise FileExistsError(f'Refusing to replace existing graph: {destination}')
+        directory = fetch_malecns(args.output)
+        graph = load_malecns_graph(directory, min_synapses=args.min_synapses)
+        save_malecns_archive(graph, args.archive, overwrite=args.overwrite)
+        if args.database:
+            save_sqlite(graph, args.database, overwrite=args.overwrite)
+        return {'archive':args.archive, 'database':args.database, 'neurons':graph.n_neurons,
+                'edges':graph.n_edges, 'contacts':float(graph.synapse_count.sum())}
+    if args.command == 'serve':
+        from .server import serve
+        serve(args.port,args.dataset,args.output,args.open_browser)
+        return {'state':'closed','output':args.output}
+    if args.command == 'fetch-flywire':
+        from .flywire import fetch_flywire, load_flywire_graph
+        directory = fetch_flywire(args.output)
+        graph = load_flywire_graph(directory, min_synapses=args.min_synapses)
+        save_sqlite(graph, args.database, overwrite=args.overwrite)
+        return {'database': args.database, 'neurons': graph.n_neurons, 'edges': graph.n_edges}
     if args.command == "import-csv":
         graph = import_csv(args.neurons, args.synapses)
         save_sqlite(graph, args.output, overwrite=args.overwrite)
@@ -219,6 +292,16 @@ def _dispatch(args: argparse.Namespace) -> dict:
     # Graph topology is fixed across benchmark seeds. Other commands expose a
     # graph seed explicitly alongside their simulator/learner seed.
     graph = _load_graph(args.graph, getattr(args, "seed", 0))
+    if args.command == 'train-timed':
+        from .training import train_timed
+        status = train_timed(graph,args.output,args.seconds,args.size,args.depth,args.seed,
+                             resume=not args.fresh,dataset_key=args.graph)
+        return {k:v for k,v in status.items() if k not in {'latest_frame','target_state'}}
+    if args.command == 'dashboard':
+        from .dashboard import export_dashboard
+        output = export_dashboard(graph, args.output, args.anatomy, args.frames, args.seed,
+                                  args.size, args.train_episodes, args.cube_checkpoint)
+        return {'html': output, 'simulated_neurons': graph.n_neurons, 'simulated_edges': graph.n_edges}
     if args.command == "query":
         result = connectivity(graph, args.neurons, direction=args.direction, hops=args.hops)
         return {"direction": args.direction, "hops": args.hops, "count": len(result), "neurons": result}
