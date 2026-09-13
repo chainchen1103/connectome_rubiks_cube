@@ -10,8 +10,14 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["numpy>=1.24,<3"]
 
+[project.optional-dependencies]
+malecns = ["pyarrow>=16,<26"]
+
 [project.scripts]
 connectome-lab = "connectome_lab.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["connectome_lab*"]
+
+[tool.setuptools.package-data]
+connectome_lab = ["assets/*.html"]

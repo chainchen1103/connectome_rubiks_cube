@@ -55,7 +55,7 @@ def _data_label(metadata: Mapping[str, Any]) -> tuple[str, str]:
     if metadata.get("synthetic") is False or any(
         word in provenance.split() for word in ("real", "measured_larval", "measured_larval_subset")
     ) or any(
-        word in provenance for word in ("flywire", "hemibrain")
+        word in provenance for word in ("flywire", "hemibrain", "malecns")
     ):
         return "實際資料匯入", "資料來源與處理方式請見中繼資料；圖形本身不構成生物學驗證。"
     return "資料來源待核對", "請依中繼資料核對來源；圖形本身不構成生物學驗證。"

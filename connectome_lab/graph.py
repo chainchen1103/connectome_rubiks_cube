@@ -50,7 +50,7 @@ class Connectome:
             raise ValueError("Edge arrays must be one-dimensional with equal length.")
         if not np.isfinite(self.synapse_count).all() or np.any(self.synapse_count <= 0):
             raise ValueError("Synapse counts must be finite and positive.")
-        if len(set(zip(self.source.tolist(), self.target.tolist()))) != self.n_edges:
+        if len(np.unique(self.source * len(ids) + self.target)) != self.n_edges:
             raise ValueError("Duplicate directed edges must be aggregated before constructing a graph.")
         self.metadata = dict(self.metadata)
 

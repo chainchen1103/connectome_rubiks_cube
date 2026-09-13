@@ -154,17 +154,19 @@ def save_sqlite(graph: Connectome, path: str | Path, *, overwrite: bool = False)
                 CREATE TABLE synapses (source INTEGER NOT NULL REFERENCES neurons(idx),
                     target INTEGER NOT NULL REFERENCES neurons(idx),
                     synapse_count REAL NOT NULL CHECK(synapse_count>0), PRIMARY KEY(source,target));
-                CREATE INDEX synapses_target ON synapses(target);
-                CREATE INDEX neurons_region ON neurons(region);
                 CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
             """)
                 conn.executemany("INSERT INTO neurons VALUES (?,?,?,?,?,?,?,?,?)",
-                                 [(i, n.id, n.neuron_type, n.neurotransmitter, n.role, n.region, n.x, n.y, n.z)
-                                  for i, n in enumerate(graph.neurons)])
+                                 ((i, n.id, n.neuron_type, n.neurotransmitter, n.role, n.region, n.x, n.y, n.z)
+                                  for i, n in enumerate(graph.neurons)))
                 conn.executemany("INSERT INTO synapses VALUES (?,?,?)",
-                                 [(int(s), int(t), float(c)) for s, t, c in zip(graph.source, graph.target, graph.synapse_count)])
+                                 ((int(s), int(t), float(c)) for s, t, c in zip(graph.source, graph.target, graph.synapse_count)))
                 conn.executemany("INSERT INTO metadata VALUES (?,?)",
                                  [(str(k), json.dumps(v, ensure_ascii=False, allow_nan=False)) for k, v in graph.metadata.items()])
+                # Bulk-load before building secondary indexes. Streaming tuples
+                # avoids materializing tens of millions of Python edge objects.
+                conn.execute("CREATE INDEX synapses_target ON synapses(target)")
+                conn.execute("CREATE INDEX neurons_region ON neurons(region)")
                 conn.execute("PRAGMA user_version=1")
         # Close before replace so this also works on Windows.
         os.replace(temporary, path)
@@ -185,11 +187,12 @@ def load_sqlite(path: str | Path, *, region: str | None = None,
         if [r[0] for r in rows] != list(range(len(rows))):
             raise ValueError("Database neuron indices must be contiguous from zero.")
         neurons = [Neuron(*r[1:]) for r in rows]
-        edges = conn.execute("SELECT source,target,synapse_count FROM synapses ORDER BY source,target").fetchall()
+        count = conn.execute("SELECT count(*) FROM synapses").fetchone()[0]
+        edges = np.fromiter(
+            conn.execute("SELECT source,target,synapse_count FROM synapses ORDER BY source,target"),
+            dtype=[('source', np.int64), ('target', np.int64), ('count', np.float64)], count=count)
         metadata = {k: json.loads(v) for k, v in conn.execute("SELECT key,value FROM metadata")}
-    graph = Connectome(neurons, np.array([e[0] for e in edges], dtype=np.int64),
-                       np.array([e[1] for e in edges], dtype=np.int64),
-                       np.array([e[2] for e in edges]), metadata)
+    graph = Connectome(neurons, edges['source'], edges['target'], edges['count'], metadata)
     return subgraph(graph, region=region, ids=ids) if region is not None or ids is not None else graph
 
 
