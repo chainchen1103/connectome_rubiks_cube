@@ -1,0 +1,168 @@
+{
+  "artifact_format": "compact-experiment-v1",
+  "source_file": "outputs/cube2_curriculum/results.json",
+  "source_file_sha256": "395e6742f98b707ad2bd3d395633d4a26212fadb16104b0f29949f95333b66fc",
+  "omitted_fields": [
+    "training_rewards",
+    "representation_before",
+    "representation_after"
+  ],
+  "metadata": {
+    "schema_version": 1,
+    "package_version": "0.1.0",
+    "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+    "numpy": "2.3.5",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "graph_sha256": "bd5c80901eb5568f4a7de18aabd7383f71e8963f9dfcf640573e823707099db7",
+    "graph": {
+      "kind": "synthetic",
+      "seed": 0,
+      "biological_topology": false,
+      "description": "Engineering fixture, not a reconstructed fly circuit.",
+      "coordinates": "synthetic layout",
+      "neurotransmitters": "synthetic assignments"
+    },
+    "n_neurons": 68,
+    "n_edges": 696,
+    "learning_rule": "motor_edge_three_factor_semi_gradient",
+    "evaluation_policy": "stochastic softmax; frozen copy; fixed evaluation seeds",
+    "scope": "Research prototype; no claim of biological intelligence or general cube solving"
+  },
+  "curriculum": {
+    "size": 2,
+    "depths": [
+      1,
+      2,
+      3
+    ],
+    "episodes_per_depth": 300,
+    "interactions": 5122,
+    "before_final_holdout": {
+      "success_rate": 0.04,
+      "episodes": 100,
+      "successes": 4,
+      "wilson95": [
+        0.015663050551848016,
+        0.09837217232607373
+      ],
+      "mean_return": 0.04,
+      "mean_steps": 8.72,
+      "interval_note": "Descriptive Bernoulli interval; repeated states are not independent generalization samples"
+    },
+    "after_final_holdout": {
+      "success_rate": 0.01,
+      "episodes": 100,
+      "successes": 1,
+      "wilson95": [
+        0.0017673865655472645,
+        0.0544875247609346
+      ],
+      "mean_return": 0.01,
+      "mean_steps": 8.92,
+      "interval_note": "Descriptive Bernoulli interval; repeated states are not independent generalization samples"
+    },
+    "final_holdout_count": 16,
+    "all_training_initial_overlap": 0,
+    "heldout_visited_in_training_trajectories": 8,
+    "strict_unseen_count": 8,
+    "symmetry_disjoint": false,
+    "strict_unseen_evaluation": {
+      "success_rate": 0.01,
+      "episodes": 100,
+      "successes": 1,
+      "wilson95": [
+        0.0017673865655472645,
+        0.0544875247609346
+      ],
+      "mean_return": 0.01,
+      "mean_steps": 8.94,
+      "interval_note": "Descriptive Bernoulli interval; repeated states are not independent generalization samples"
+    },
+    "random_baseline": {
+      "success_rate": 0.01,
+      "episodes": 100,
+      "mean_steps": 8.92,
+      "policy": "uniform independent actions"
+    },
+    "weight_change_l1": 21.138269611158115,
+    "agent_config": {
+      "steps_per_action": 20,
+      "input_current": 3.5,
+      "learning_rate": 0.08,
+      "temperature": 0.1,
+      "activity_tau_ms": 120.0,
+      "eligibility_decay": 0.95,
+      "max_weight": 8.0,
+      "memory": true
+    },
+    "interface_notes": []
+  },
+  "runs": [
+    {
+      "task": "cube2/depth1",
+      "topology": "original",
+      "seed": 0,
+      "variant": "curriculum",
+      "before_success": 0.16,
+      "after_success": 0.23,
+      "evaluation_scope": "training start states; not generalization",
+      "interactions": 792,
+      "weight_change_l1": 16.908837742184218,
+      "stability": {
+        "mean_rate_hz": 60.294117647058826,
+        "max_rate_hz": 250.0,
+        "silent_fraction": 0.5588235294117647,
+        "active_fraction": 0.4411764705882353,
+        "peak_population_fraction": 0.14705882352941177,
+        "all_finite": true
+      },
+      "train_start_count": 8,
+      "training_episodes": 300,
+      "training_reward_sum": 70.0
+    },
+    {
+      "task": "cube2/depth2",
+      "topology": "original",
+      "seed": 0,
+      "variant": "curriculum",
+      "before_success": 0.06,
+      "after_success": 0.07,
+      "evaluation_scope": "training start states; not generalization",
+      "interactions": 1734,
+      "weight_change_l1": 7.131623819470453,
+      "stability": {
+        "mean_rate_hz": 106.61764705882354,
+        "max_rate_hz": 350.0,
+        "silent_fraction": 0.17647058823529413,
+        "active_fraction": 0.8235294117647058,
+        "peak_population_fraction": 0.17647058823529413,
+        "all_finite": true
+      },
+      "train_start_count": 64,
+      "training_episodes": 300,
+      "training_reward_sum": 21.0
+    },
+    {
+      "task": "cube2/depth3",
+      "topology": "original",
+      "seed": 0,
+      "variant": "curriculum",
+      "before_success": 0.04,
+      "after_success": 0.04,
+      "evaluation_scope": "training start states; not generalization",
+      "interactions": 2596,
+      "weight_change_l1": 6.7938166238477935,
+      "stability": {
+        "mean_rate_hz": 100.0,
+        "max_rate_hz": 350.0,
+        "silent_fraction": 0.23529411764705882,
+        "active_fraction": 0.7647058823529411,
+        "peak_population_fraction": 0.16176470588235295,
+        "all_finite": true
+      },
+      "train_start_count": 64,
+      "training_episodes": 300,
+      "training_reward_sum": 15.0
+    }
+  ]
+}

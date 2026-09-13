@@ -1,0 +1,27 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: pip
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Install package and optional raw-data reader
+        run: python -m pip install -e '.[malecns]'
+      - name: Python tests, including bundled-data validation
+        run: python -m unittest discover -s tests -v
+      - name: Dashboard geometry and display tests
+        run: node --test tests/test_dashboard_js.mjs

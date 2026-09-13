@@ -1,0 +1,70 @@
+{
+  "neurons": 139255,
+  "edges": 2700513,
+  "simulated_ms": 30,
+  "wall_seconds": 1.3101646900177002,
+  "stimulated_neurons": 24,
+  "model": {
+    "dt_ms": 1.0,
+    "tau_m_ms": 10.0,
+    "tau_syn_ms": 12.0,
+    "refractory_ms": 2.0,
+    "v_rest": 0.0,
+    "v_reset": 0.0,
+    "threshold": 1.0,
+    "gain": 4.0,
+    "noise_std": 0.0
+  },
+  "activity": {
+    "mean_rate_hz": 0.01196845116273503,
+    "max_rate_hz": 66.66666666666667,
+    "silent_fraction": 0.9998132921618613,
+    "active_fraction": 0.00018670783813866648,
+    "peak_population_fraction": 0.00017234569674338444,
+    "all_finite": true
+  },
+  "metadata": {
+    "kind": "measured_flywire_adult",
+    "dataset": "FAFB FlyWire v783",
+    "biological_topology": true,
+    "total_neurons": 139255,
+    "coordinates": "First published community anchor per neuron, in nanometres; not soma or skeleton",
+    "coordinate_rows": 238909,
+    "missing_coordinate_ids": [],
+    "source_url": "https://codex.flywire.ai",
+    "source_files": {
+      "neurons.csv.gz": {
+        "url": "https://storage.googleapis.com/flywire-data/codex/data/fafb/783/neurons.csv.gz",
+        "sha256": "6a6b3759e635f0f35a677d169052362131ec61d95f55919298b55c43fce4e719"
+      },
+      "coordinates.csv.gz": {
+        "url": "https://storage.googleapis.com/flywire-data/codex/data/fafb/783/coordinates.csv.gz",
+        "sha256": "14337121f451f98c2576cee72c24409ada5aaf7948b7c7ca8de9040296840e05"
+      },
+      "classification.csv.gz": {
+        "url": "https://storage.googleapis.com/flywire-data/codex/data/fafb/783/classification.csv.gz",
+        "sha256": "e946b552f4056dfc977707be0674609832c3f64332a22d69dc0d9615e7aae663"
+      },
+      "connections.csv.gz": {
+        "url": "https://storage.googleapis.com/flywire-data/codex/data/fafb/783/connections.csv.gz",
+        "sha256": "d49dd692e59e153aa3c83f5257bfc0eff51247b86d7bb183386c6d1622c70fc9"
+      }
+    },
+    "license_note": "FlyWire community edits/annotations CC BY-NC 4.0; see https://flywire.ai/tos",
+    "citations": [
+      "Dorkenwald et al. (2024), Nature, doi:10.1038/s41586-024-07558-y",
+      "Schlegel et al. (2024), Nature, doi:10.1038/s41586-024-07686-5"
+    ],
+    "scope": "Released adult female brain; excludes ventral nerve cord and unproofread fragments",
+    "role_mapping": "afferent -> sensory, efferent -> motor-related; efferent is not evidence of cube/fly action tuning",
+    "source_connection_rows": 3869878,
+    "removed_self_loop_rows": 0,
+    "min_aggregated_synapses": 1,
+    "released_node_set_complete": true,
+    "total_edges": 2700513,
+    "total_contacts_retained": 34153566
+  },
+  "scope": "30 ms full released graph smoke test; no whole-brain learning claim",
+  "source_file": "outputs/full_brain/metrics.json",
+  "source_file_sha256": "dbff815c1044bd7ed2081dd0bf001d60e79ea32a55d7ae70943b32edcf3559f3"
+}
