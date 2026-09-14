@@ -153,7 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
     server.add_argument('--output',type=Path,default=Path('outputs/live'))
     server.add_argument('--open',action='store_true',dest='open_browser')
 
-    timed = commands.add_parser('train-timed', help='repeat cube attempts until deadline or solved, save and resume neural weights')
+    timed = commands.add_parser('train-timed', help='turn one cube continuously until deadline or solved; resume cube and neural state')
     _add_graph(timed,default='malecns')
     timed.add_argument('--seconds',type=_finite_float,default=60.)
     timed.add_argument('--size',type=int,choices=(2,3),default=3)
@@ -294,9 +294,22 @@ def _dispatch(args: argparse.Namespace) -> dict:
     graph = _load_graph(args.graph, getattr(args, "seed", 0))
     if args.command == 'train-timed':
         from .training import train_timed
-        status = train_timed(graph,args.output,args.seconds,args.size,args.depth,args.seed,
-                             resume=not args.fresh,dataset_key=args.graph)
-        return {k:v for k,v in status.items() if k not in {'latest_frame','target_state'}}
+        import signal
+        import threading
+        stop = threading.Event()
+        # Ctrl+C requests a stop after the current complete decision, preserving
+        # consistency between stickers, neural state and the reward update.
+        previous_handler = None
+        main_thread = threading.current_thread() is threading.main_thread()
+        if main_thread:
+            previous_handler = signal.signal(signal.SIGINT, lambda *_: stop.set())
+        try:
+            status = train_timed(graph,args.output,args.seconds,args.size,args.depth,args.seed,
+                                 resume=not args.fresh,dataset_key=args.graph,stop_event=stop)
+        finally:
+            if main_thread:
+                signal.signal(signal.SIGINT, previous_handler)
+        return {k:v for k,v in status.items() if k not in {'latest_frame','target_state','current_state'}}
     if args.command == 'dashboard':
         from .dashboard import export_dashboard
         output = export_dashboard(graph, args.output, args.anatomy, args.frames, args.seed,

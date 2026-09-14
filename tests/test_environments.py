@@ -136,6 +136,43 @@ class CubeTests(unittest.TestCase):
         cube.reset(options={"state": state})
         self.assertEqual(cube.step(CUBE_ACTIONS.index("U"))[1:4], (-0.01, False, True))
 
+    def test_unbounded_episode_preserves_state_past_old_horizon(self):
+        for size in (2, 3):
+            cube = RubiksCubeEnv(size=size, max_steps=None)
+            cube.apply_move("R")
+            initial = cube.state_key()
+            cube.reset(options={"state": initial})
+            for step in range(80):
+                _, _, terminated, truncated, info = cube.step(step % 2)
+                self.assertFalse(terminated or truncated)
+                self.assertEqual(info['steps'], step + 1)
+            self.assertEqual(cube.state_key(), initial)
+            self.assertEqual(cube.steps, 80)
+            self.assertEqual(cube.step(CUBE_ACTIONS.index("R'"))[1:4], (1.0, True, False))
+            with self.assertRaises(RuntimeError):
+                cube.step(0)
+
+    def test_resume_current_state_and_move_count(self):
+        cube = RubiksCubeEnv(size=3, max_steps=None)
+        cube.apply_move("R")
+        cube.reset(options={"state": cube.state_key()})
+        first = cube.step(0)[0]
+        restored = RubiksCubeEnv(size=3, max_steps=None)
+        second, _ = restored.reset(options={"state": cube.state_key(), "steps": 301})
+        np.testing.assert_array_equal(first, second)
+        self.assertEqual(restored.steps, 301)
+        self.assertEqual(restored.step(1)[4]['steps'], 302)
+        cube.step(1)
+        self.assertEqual(restored.state_key(), cube.state_key())
+        for invalid in (-1, True, 0.5):
+            with self.assertRaises(ValueError):
+                restored.reset(options={"state": cube.state_key(), "steps": invalid})
+        with self.assertRaises(ValueError):
+            restored.reset(options={"steps": 1})
+        bounded = RubiksCubeEnv(size=3, max_steps=10)
+        with self.assertRaises(ValueError):
+            bounded.reset(options={"state": cube.state_key(), "steps": 10})
+
     def test_seed_curriculum_no_solved_starts_and_no_history(self):
         first, second = RubiksCubeEnv(seed=10), RubiksCubeEnv(seed=10)
         for depth in (1, 2, 3, 4, 8):

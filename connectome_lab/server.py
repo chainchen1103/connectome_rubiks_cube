@@ -25,13 +25,14 @@ class ExperimentService:
             try:
                 item = json.loads(path.read_text(encoding='utf-8'))
                 if isinstance(item,dict) and item.get('run_id'):
-                    history.append({k:v for k,v in item.items() if k not in {'latest_frame','target_state'}})
+                    history.append({k:v for k,v in item.items() if k not in {'latest_frame','target_state','current_state'}})
             except (OSError,ValueError):
                 continue
         self.status = {'state': 'idle', 'dataset_key': dataset, 'history': history}
         self.graphs = {}
-        self.pages = {key: self.output_dir / f'{key}-latest.html' for key in ('malecns','flywire')
-                      if (self.output_dir / f'{key}-latest.html').is_file()}
+        # Re-render the current template after software updates. Old HTML may
+        # describe a retired training protocol, even when its policy is valid.
+        self.pages = {}
 
     def graph(self, dataset):
         if dataset not in {'flywire','malecns'}:
@@ -46,7 +47,12 @@ class ExperimentService:
         graph = self.graph(dataset)
         with self.lock:
             if dataset not in self.pages:
-                self.pages[dataset] = export_dashboard(graph, self.output_dir / f'{dataset}.html', frames=45)
+                previous = next((item for item in reversed(self.status.get('history', []))
+                                 if item.get('dataset_key') == dataset and item.get('checkpoint_path')
+                                 and Path(item['checkpoint_path']).is_file()), None)
+                self.pages[dataset] = export_dashboard(graph, self.output_dir / f'{dataset}.html', frames=60,
+                                                       size=previous.get('cube_size', 3) if previous else 3,
+                                                       cube_checkpoint=previous['checkpoint_path'] if previous else None)
             return self.pages[dataset]
 
     def get_status(self):
@@ -91,7 +97,7 @@ class ExperimentService:
                                               frames=60,size=size,cube_checkpoint=checkpoint)
                     with self.lock:
                         self.pages[dataset] = replay
-                        history.append({k:v for k,v in result.items() if k not in {'latest_frame','target_state'}})
+                        history.append({k:v for k,v in result.items() if k not in {'latest_frame','target_state','current_state'}})
                         self.status = {**result,'state':'completed','history':history[-50:], 'replay_url':f'/api/replay?dataset={dataset}'}
                 except Exception as exc:
                     with self.lock:

@@ -164,7 +164,10 @@ class RubiksCubeEnv:
     merely assigning different random seeds does not separate cube states.
 
     ``reset(options={"state": key})`` loads a supplied configuration, useful
-    for a precomputed split. No scramble path is retained or returned.
+    for a precomputed split. Include ``steps`` to resume its move count.
+    ``max_steps=None`` keeps one episode running until solved; callers can
+    impose a wall-time limit without resetting the cube. No scramble path is
+    retained or returned.
     """
 
     action_names = CUBE_ACTIONS
@@ -174,7 +177,7 @@ class RubiksCubeEnv:
         self,
         size: int = 2,
         scramble_depth: int = 1,
-        max_steps: int = 20,
+        max_steps: int | None = 20,
         step_cost: float = 0.0,
         seed: int | None = None,
     ):
@@ -182,7 +185,7 @@ class RubiksCubeEnv:
         if self.size not in (2, 3):
             raise ValueError("size must be 2 or 3")
         self.scramble_depth = _integer(scramble_depth, "scramble_depth", 1)
-        self.max_steps = _integer(max_steps, "max_steps", 1)
+        self.max_steps = None if max_steps is None else _integer(max_steps, "max_steps", 1)
         self.step_cost = float(step_cost)
         if not np.isfinite(self.step_cost) or self.step_cost < 0:
             raise ValueError("step_cost must be finite and nonnegative")
@@ -214,6 +217,11 @@ class RubiksCubeEnv:
     def state_key(self) -> tuple[int, ...]:
         """Exact orientation-sensitive state identifier for split auditing."""
         return tuple(int(color) for color in self._stickers)
+
+    @property
+    def steps(self) -> int:
+        """Number of moves made in this episode, including resumed moves."""
+        return self._steps
 
     def is_solved(self) -> bool:
         faces = self._stickers.reshape(6, -1)
@@ -256,9 +264,14 @@ class RubiksCubeEnv:
         if seed is not None:
             self._rng = np.random.default_rng(seed)
         options = {} if options is None else options
-        unknown = set(options) - {"state", "scramble_depth"}
+        unknown = set(options) - {"state", "scramble_depth", "steps"}
         if unknown:
             raise ValueError(f"unknown reset options: {sorted(unknown)}")
+        steps = _integer(options.get("steps", 0), "steps")
+        if "steps" in options and "state" not in options:
+            raise ValueError("steps requires a supplied state")
+        if self.max_steps is not None and steps >= self.max_steps:
+            raise ValueError("steps must be less than max_steps for an unfinished episode")
         if "state" in options:
             if "scramble_depth" in options:
                 raise ValueError("specify state or scramble_depth, not both")
@@ -283,7 +296,7 @@ class RubiksCubeEnv:
             else:
                 raise RuntimeError("failed to sample an unsolved cube after 1000 attempts")
             info = {"scramble_depth": depth}
-        self._steps = 0
+        self._steps = steps
         self._done = False
         return self._observe(), info
 
@@ -294,7 +307,7 @@ class RubiksCubeEnv:
         self.apply_move(action)
         self._steps += 1
         terminated = self.is_solved()
-        truncated = self._steps >= self.max_steps and not terminated
+        truncated = self.max_steps is not None and self._steps >= self.max_steps and not terminated
         self._done = terminated or truncated
         reward = 1.0 if terminated else -self.step_cost
         return self._observe(), reward, terminated, truncated, {"success": terminated, "steps": self._steps}
