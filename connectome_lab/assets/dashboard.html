@@ -16,6 +16,7 @@
 @media(max-width:1000px){.training-controls{gap:8px}.training-controls input{width:85px}.training-action{margin-left:0}.training-stats{gap:9px}.training-stats strong{font-size:13px}.training-live-note{max-width:55%;font-size:9px}}
 @media(max-width:760px){.training-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}.training-controls input,.training-controls select{width:100%}.training-action{grid-column:1/-1}.training-action button{flex:1}.training-stats{grid-template-columns:repeat(3,1fr);row-gap:10px}.training-live-note{max-width:49%;font-size:9px}.training-bottom{align-items:flex-start;flex-direction:column;gap:8px}.training-hint-row{align-items:flex-start;gap:8px}.training-config-note{font-size:10px}.training-history{width:100%;max-width:none}.training-heading{font-size:12px}}
 @media(max-width:760px){.brain-hint{top:49px}.brain-toolbar{left:16px;right:auto}}
+.reward-panel{margin:0 17px 12px;padding:10px 12px;background:#0a1721;border:1px solid #253e4c;border-radius:7px}.reward-heading{display:flex;gap:12px;justify-content:space-between;align-items:center;color:#a9c5ce;font-size:10px}.reward-heading span{color:#8faabb}.reward-breakdown{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-top:8px}.reward-breakdown span{display:block;font-size:9px;color:#829dad}.reward-breakdown strong{display:block;font:13px Consolas,monospace;color:#bcd3dc;margin-top:2px}.reward-breakdown strong.positive{color:var(--cyan)}.reward-breakdown strong.negative{color:var(--orange)}.reward-note{font-size:9px;color:#8aa3b4;margin-top:8px}.training-puzzle{font-size:10px;color:#94b3bf;padding:0 17px 9px;overflow-wrap:anywhere}@media(max-width:760px){.reward-breakdown{grid-template-columns:repeat(3,minmax(0,1fr))}.reward-heading{align-items:flex-start;flex-direction:column;gap:3px}}
 </style>
 </head>
 <body>
@@ -39,9 +40,11 @@
       <label for="training-depth">打亂步數<input type="number" id="training-depth" min="1" step="1" value="1" inputmode="numeric" disabled></label>
       <div class="training-action"><button id="training-start" class="start-training" disabled>▶ 開始／續跑</button><button id="training-stop" class="stop-training" disabled>■ 停止並保存</button></div>
     </div>
-    <div class="training-config-note">同一輪反覆嘗試同一個起始魔方；<b>時間到或第一次解出即停止</b>。保存神經權重與學習狀態，下次可繼續累積。</div>
+    <div class="training-config-note"><b>同一回合持續轉動，沒有步數上限，也不重設魔方。</b>解出、時間到或手動停止後保存；未解出時，下次從最後一步與神經狀態繼續。</div>
     <div class="training-progress" role="progressbar" aria-label="本輪訓練時間" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="training-progress"></div></div>
-    <div class="training-stats"><div><span>經過／上限</span><strong id="training-elapsed">0.0 / 60 s</strong></div><div><span>嘗試回合</span><strong id="training-episodes">0</strong></div><div><span>實際轉動</span><strong id="training-interactions">0</strong></div><div><span>成功次數</span><strong id="training-successes">0</strong></div><div><span>本輪權重變化量 L1</span><strong id="training-weight">0.0000</strong></div><div><span>停止原因</span><strong id="training-reason">尚未開始</strong></div></div>
+    <div class="training-stats"><div><span>經過／上限</span><strong id="training-elapsed">0.0 / 60 s</strong></div><div><span>本回合累積步數</span><strong id="training-episode-steps">0</strong></div><div><span>本次啟動轉動</span><strong id="training-interactions">0</strong></div><div><span>本回合累積獎懲</span><strong id="training-cumulative-reward">0.0000</strong></div><div><span>本次權重變化量 L1</span><strong id="training-weight">0.0000</strong></div><div><span>停止原因</span><strong id="training-reason">尚未開始</strong></div></div>
+    <div class="training-puzzle" id="training-puzzle">尚未開始回合</div>
+    <div class="reward-panel" aria-label="最新一步獎懲明細"><div class="reward-heading"><b>最新一步獎懲</b><span id="training-potential">同面同色配對分數 —</span></div><div class="reward-breakdown"><div><span>同色配對改善</span><strong id="reward-progress">—</strong></div><div><span>每步成本</span><strong id="reward-step">—</strong></div><div><span>立即反轉</span><strong id="reward-inverse">—</strong></div><div><span>重訪狀態</span><strong id="reward-revisit">—</strong></div><div><span>解出獎勵</span><strong id="reward-solved">—</strong></div><div><span>本步總計</span><strong id="reward-total">—</strong></div></div><div class="reward-note">獎勵同面同色配對增加；每步 −0.002、立即反轉 −0.01、重訪最近 256 個狀態 −0.02，解出 +1。同色分數不是最短解距離；必要的暫時退步也可能扣分。</div></div>
     <div class="training-bottom"><div class="training-message" id="training-message" aria-live="polite">離線重播模式；執行 <code>python -m connectome_lab serve</code> 啟用訓練。</div><a class="training-replay hidden" id="training-replay" href="/api/replay">載入最新神經活動重播 ↗</a></div>
     <div class="training-hint-row"><select class="training-history" id="training-history" disabled aria-label="查看本機訓練紀錄"><option>尚無本機訓練紀錄</option></select><span class="small muted" id="training-sampling">重播與訓練分開控制；下方按鈕只播放已記錄的活動。</span></div>
     <div id="history-detail" class="hidden"></div>
@@ -345,7 +348,7 @@ function updateMetrics(){
   setText('recording-mode',training.busy && training.liveRun && mode==='cube'?'Python LIF 即時訓練 · 每秒取樣':'重播 Python LIF 模擬');
   setText('active-count',number(spikes.size));setText('rate-caption',`平均放電率 ${(rates.reduce((s,r)=>s+r,0)/Math.max(1,rates.length)).toFixed(1)} Hz`);
   for(const which of ['cube','fly']){$(`${which}-link`).classList.toggle('current',mode===which);setText(`${which}-link`,mode===which?'正在連結神經活動':'獨立紀錄 · 已暫停');$(`mode-${which}`).classList.toggle('active',mode===which);$(`mode-${which}`).setAttribute('aria-pressed',String(mode===which));}
-  const c=currentFrame('cube'),f=currentFrame('fly');setText('cube-action',c.action==null?'—':cube.actions[c.action] || String(c.action));setText('cube-step',c.step ?? 0);setText('cube-reward',Number(c.reward || 0).toFixed(2));
+  const c=currentFrame('cube'),f=currentFrame('fly');setText('cube-action',c.action==null?'—':cube.actions[c.action] || String(c.action));setText('cube-step',c.step ?? 0);setText('cube-reward',Number(c.reward || 0).toFixed(4));
   if(c.state?.length){const perFace=(cube.size||3)**2;let matched=0;for(let face=0;face<6;face++){const faceState=c.state.slice(face*perFace,(face+1)*perFace);const counts=Array(6).fill(0);faceState.forEach(v=>counts[v]++);matched+=Math.max(...counts);}setText('cube-progress',`${matched}/${c.state.length}`);}
   const history=cube.frames.slice(0,indices.cube+1).filter(frame=>frame.episode===c.episode && frame.action!=null).slice(-11);$('cube-history').replaceChildren();history.forEach((frame,i)=>{const chip=document.createElement('span');chip.className='move-chip'+(i===history.length-1?' last':'');chip.textContent=cube.actions[frame.action];$('cube-history').append(chip);});
   setText('fly-action',f.action==null?'起點':flyActions[f.action] || String(f.action));setText('fly-heading',`${(((Number(f.heading||0)*180/Math.PI)%360+360)%360).toFixed(0)}°`);
@@ -415,7 +418,16 @@ function setupDrag(canvas,initialCamera,isBrain){
   canvas.addEventListener('pointercancel',()=>{drag=null;canvas.style.cursor='grab';});
 }
 function trainingReason(value){
-  return ({solved:'首次解出',first_solve:'首次解出',success:'首次解出',time_limit:'時間到',timeout:'時間到',deadline:'時間到',stopped:'使用者停止',user_stop:'使用者停止',manual_stop:'使用者停止',stop_requested:'使用者停止',cancelled:'使用者停止',running:'持續嘗試',saving:'保存中',error:'執行錯誤',idle:'尚未開始'})[value] || value || '尚未開始';
+  return ({solved:'已解出',first_solve:'已解出',success:'已解出',time_limit:'時間到',timeout:'時間到',deadline:'時間到',stopped:'使用者停止',user_stop:'使用者停止',manual_stop:'使用者停止',stop_requested:'使用者停止',cancelled:'使用者停止',running:'持續轉動',saving:'保存中',error:'執行錯誤',idle:'尚未開始'})[value] || value || '尚未開始';
+}
+function rewardDisplay(terms){
+  const signed=value=>typeof value==='number' && Number.isFinite(value)?`${value>0?'+':''}${value.toFixed(4)}`:'—';
+  return {progress:signed(terms?.progress_reward),step:signed(terms?.step_penalty),inverse:signed(terms?.inverse_penalty),revisit:signed(terms?.revisit_penalty),solved:signed(terms?.solved_bonus),total:signed(terms?.reward),potential:typeof terms?.potential_before==='number' && typeof terms?.potential_after==='number'?`${terms.potential_before.toFixed(3)} → ${terms.potential_after.toFixed(3)}`:'—'};
+}
+function updateReward(terms){
+  const display=rewardDisplay(terms);
+  for(const key of ['progress','step','inverse','revisit','solved','total']){const node=$(`reward-${key}`);node.textContent=display[key];node.classList.toggle('positive',Number(display[key])>0);node.classList.toggle('negative',Number(display[key])<0);}
+  setText('training-potential',`同面同色配對分數 ${display.potential}`);
 }
 function trainingControls(){
   const locked=!training.available || training.busy || training.pending;
@@ -442,7 +454,9 @@ function updateTraining(status){
   setText('training-state',stateNames[status.state] || '已連線');$('training-state').classList.toggle('current',status.state==='running');
   setText('training-connection',`${status.graph_name || (pageDataset==='malecns'?'MaleCNS':'FlyWire')} · 本機 Python 訓練服務`);
   const elapsed=Number(status.elapsed_seconds || 0),limit=Number(status.limit_seconds || $('training-seconds').value || 60);
-  setText('training-elapsed',`${elapsed.toFixed(1)} / ${limit} s`);setText('training-episodes',number(status.episodes));setText('training-interactions',number(status.interactions));setText('training-successes',number(status.successes));setText('training-weight',Number(status.weight_change_l1 || 0).toFixed(4));
+  setText('training-elapsed',`${elapsed.toFixed(1)} / ${limit} s`);setText('training-episode-steps',number(status.episode_steps ?? status.latest_frame?.step ?? 0));setText('training-interactions',number(status.interactions));setText('training-cumulative-reward',status.cumulative_reward==null?'—':Number(status.cumulative_reward).toFixed(4));setText('training-weight',Number(status.weight_change_l1 || 0).toFixed(4));
+  setText('training-puzzle',status.puzzle_id?`回合 ${status.puzzle_id} · 步數與累積獎懲包含先前接續紀錄${status.run_reward==null?'':` · 本次獎懲 ${Number(status.run_reward).toFixed(4)}`}`:status.state==='idle'?'尚未開始回合':'本紀錄未提供跨啟動回合識別');
+  updateReward(status.latest_frame?.reward_terms);
   setText('training-reason',trainingReason(status.reason || (status.state==='running'?'running':status.state)));
   const percent=clamp(elapsed/Math.max(1,limit)*100,0,100);$('training-progress').style.width=`${percent}%`;$('training-progress').parentElement.setAttribute('aria-valuenow',String(Math.round(percent)));
   $('training-replay').classList.toggle('hidden',status.state!=='completed' || !status.checkpoint_path);
@@ -450,9 +464,9 @@ function updateTraining(status){
   if(status.error)trainingMessage(status.error,true);
   else if(status.state==='saving')trainingMessage('已停止動作，正在保存神經權重、學習狀態與本輪紀錄。');
   else if(status.checkpoint_path && status.state==='completed'){
-    trainingMessage(`${trainingReason(status.reason)}。權重已保存，下輪將讀取相同任務的 checkpoint：`);
+    trainingMessage(`${trainingReason(status.reason)}。${['solved','first_solve','success'].includes(status.reason)?'下次開始新的魔方回合並保留權重。':'魔方目前狀態與神經狀態已保存，下次從最後一步繼續。'} checkpoint：`);
     const path=document.createElement('code');path.textContent=status.checkpoint_path;$('training-message').append(path);
-  }else if(status.state==='running')trainingMessage(`正在反覆嘗試；${limit} 秒上限與首次解出任一達成即保存。${status.checkpoint_path?'已接續既有學習狀態。':''}`);
+  }else if(status.state==='running')trainingMessage(`正在持續轉動同一個魔方；解出或 ${limit} 秒上限達成即保存。時間於動作之間檢查，存檔接續完成。${status.resume_notice || ''}`);
   else trainingMessage('本機服務已就緒。開始／續跑會自動載入相同資料集、魔方大小與打亂深度的學習狀態。');
   updateTrainingHistory(status.history || []);
   if(status.latest_frame && (training.busy || training.liveRun===String(status.run_id)))applyLiveFrame({frame:status.latest_frame,dataset:status.dataset_key,graph_sha256:status.graph_sha256,cube_size:status.cube_size,run_id:status.run_id,interactions:status.interactions,state:status.state});
@@ -460,11 +474,11 @@ function updateTraining(status){
   trainingControls();
 }
 function updateTrainingHistory(history){
-  const key=JSON.stringify(history.map(item=>[item.run_id,item.reason,item.checkpoint_path,item.episodes]));
+  const key=JSON.stringify(history.map(item=>[item.run_id,item.reason,item.checkpoint_path,item.episode_steps,item.interactions]));
   if(key===training.historyKey)return;training.historyKey=key;training.history=history;
   const previous=$('training-history').value;$('training-history').replaceChildren();
   const prompt=document.createElement('option');prompt.value='';prompt.textContent=history.length?`查看 ${history.length} 筆本機訓練紀錄`:'尚無本機訓練紀錄';$('training-history').append(prompt);
-  history.forEach((item,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=`${item.run_id || i+1} · ${trainingReason(item.reason)} · ${number(item.episodes)} 回合`;$('training-history').append(option);});
+  history.forEach((item,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=`${item.run_id || i+1} · ${trainingReason(item.reason)} · ${number(item.interactions)} 次轉動`;$('training-history').append(option);});
   $('training-history').disabled=!history.length;if([...$('training-history').options].some(option=>option.value===previous))$('training-history').value=previous;
 }
 function makeCubeGeometry(size){
@@ -517,7 +531,7 @@ function initTraining(){
   });
   $('training-history').addEventListener('change',()=>{
     const value=$('training-history').value,item=value!==''?training.history[Number(value)]:null;$('history-detail').classList.toggle('hidden',!item);
-    if(item)setText('history-detail',`${item.run_id || '已保存回合'} · ${trainingReason(item.reason)} · ${number(item.interactions)} 次動作 · 權重變化 ${Number(item.weight_change_l1 || 0).toFixed(4)} · ${item.checkpoint_path || '未提供 checkpoint 路徑'}`);
+    if(item)setText('history-detail',`${item.run_id || '已保存訓練'} · ${trainingReason(item.reason)} · 本次 ${number(item.interactions)} 次動作${item.episode_steps==null?'':` · 回合累積 ${number(item.episode_steps)} 步`}${item.cumulative_reward==null?'':` · 累積獎懲 ${Number(item.cumulative_reward).toFixed(4)}`} · 權重變化 ${Number(item.weight_change_l1 || 0).toFixed(4)} · ${item.checkpoint_path || '未提供 checkpoint 路徑'}`);
   });
   window.addEventListener('connectome-frame',event=>applyLiveFrame(event.detail || {}));poll();
 }
@@ -547,7 +561,7 @@ function tick(now){
   if(playing && !transition && now-lastTimestamp>=900/speed){if(indices[mode]>=currentEpisode().end)pause();else goTo(indices[mode]+1,true);}
   if(metricsDirty)updateMetrics();if(brainDirty)drawBrain();if(sceneDirty || transition){drawCube(now);drawFly(now);sceneDirty=false;}requestAnimationFrame(tick);
 }
-window.ConnectomeDashboard={rotateAxis,moveSpec,cubeStickerVertices,groupEpisodes,normalizePositions,normalizeSkeletonSegments,makeCubeGeometry,trainingReason,applyLiveFrame,setMode,selectNeuron,getState:()=>({mode,selected,playing,indices:{...indices},anatomyCount:anatomyPoints.length,skeletonSegmentCount:skeletonSegments.length,showSkeletons,simulatedCount:n,renderer:glState?'webgl':fallback?'canvas':'unavailable',training:{available:training.available,busy:training.busy,liveRun:training.liveRun}})};
+window.ConnectomeDashboard={rotateAxis,moveSpec,cubeStickerVertices,groupEpisodes,normalizePositions,normalizeSkeletonSegments,makeCubeGeometry,trainingReason,rewardDisplay,applyLiveFrame,setMode,selectNeuron,getState:()=>({mode,selected,playing,indices:{...indices},anatomyCount:anatomyPoints.length,skeletonSegmentCount:skeletonSegments.length,showSkeletons,simulatedCount:n,renderer:glState?'webgl':fallback?'canvas':'unavailable',training:{available:training.available,busy:training.busy,liveRun:training.liveRun}})};
 initialize();
 })();
 </script>

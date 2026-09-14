@@ -11,7 +11,7 @@ const source = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0][1].replace
 const payload = {metadata:{},anatomy:{positions:[],ids:[]},circuit:{ids:[],positions:[]},cube:{frames:[]},fly:{frames:[]}};
 const context = {window:{matchMedia:()=>({matches:false})},document:{getElementById:()=>({textContent:JSON.stringify(payload)})}};
 vm.runInNewContext(source, context);
-const {rotateAxis,moveSpec,cubeStickerVertices,groupEpisodes,normalizePositions,normalizeSkeletonSegments} = context.window.ConnectomeDashboard;
+const {rotateAxis,moveSpec,cubeStickerVertices,groupEpisodes,normalizePositions,normalizeSkeletonSegments,rewardDisplay} = context.window.ConnectomeDashboard;
 const plain = object => JSON.parse(JSON.stringify(object));
 const near = (actual, expected) => actual.forEach((v,i) => assert.ok(Math.abs(v-expected[i])<1e-9, `${actual} != ${expected}`));
 
@@ -76,4 +76,14 @@ test('source skeleton segments preserve adjacency and the anatomical coordinate 
 
 test('replay grouping never interpolates between independent reset episodes', () => {
   assert.deepEqual(plain(groupEpisodes([{episode:1},{episode:1},{episode:2},{episode:3},{episode:3}])),[{id:1,start:0,end:1},{id:2,start:2,end:2},{id:3,start:3,end:4}]);
+});
+
+test('training reward display retains small penalties and distinguishes missing data from zero', () => {
+  const result=rewardDisplay({potential_before:.5,potential_after:.5,progress_reward:0,step_penalty:-.002,inverse_penalty:-.01,revisit_penalty:-.02,solved_bonus:0,reward:-.032});
+  assert.equal(result.step,'-0.0020');
+  assert.equal(result.total,'-0.0320');
+  assert.equal(result.progress,'0.0000');
+  assert.equal(result.potential,'0.500 → 0.500');
+  assert.equal(rewardDisplay(undefined).total,'—');
+  assert.equal(rewardDisplay({reward:0}).total,'0.0000');
 });
