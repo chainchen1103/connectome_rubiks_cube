@@ -11,3 +11,10 @@ outputs/
 data/downloads/
 *.sqlite
 基於果蠅神經連接體的數位學習系統.pdf
+
+# Local assistant instructions and development planning notes
+.agents/
+.codex/
+AGENTS.md
+PLANS.md
+docs/implementation_plan.md
